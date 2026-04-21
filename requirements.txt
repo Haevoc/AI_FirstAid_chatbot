@@ -1,0 +1,4 @@
+flask
+pandas # Helpful for initial cleaning (if needed) but not for final app.py
+python-dotenv
+google-genai # Or the library for your chosen LLM (e.g., openai)

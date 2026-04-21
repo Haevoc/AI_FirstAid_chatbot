@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Student Support Chat · Debug Mode</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #60a5fa;
+      --user: #1f2937;
+      --assistant: #0b3b77;
+      --border: #1f2937;
+      --warn: #f59e0b;
+      --err: #ef4444;
+      --ok: #10b981;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #0b1223, var(--bg));
+      color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, "Noto Sans";
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 8px;
+    }
+    header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(17,24,39,0.7);
+      display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    }
+    header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+    .controls {
+      display: flex; flex-wrap: wrap; gap: 10px; margin-left: auto;
+      align-items: center;
+    }
+    .controls input[type="text"] {
+      background: #0b1223; color: var(--text); border: 1px solid var(--border);
+      padding: 6px 8px; border-radius: 8px; min-width: 260px;
+      font: 13px/1.3 var(--mono);
+    }
+    .controls label { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+    .controls input[type="checkbox"] { accent-color: var(--accent); }
+
+    .topnote {
+      padding: 8px 16px; color: var(--muted); font-size: 13px;
+      border-bottom: 1px dashed var(--border);
+    }
+
+    main {
+      padding: 12px 16px;
+      display: grid; grid-template-columns: 1fr minmax(320px, 420px);
+      gap: 12px;
+    }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+    }
+
+    .chat {
+      width: 100%;
+      max-width: 900px;
+      display: grid;
+      grid-template-rows: 1fr auto;
+      gap: 10px;
+    }
+
+    .history {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: rgba(17,24,39,0.6);
+      overflow-y: auto;
+      min-height: 55vh;
+    }
+
+    .bubble {
+      max-width: 85%;
+      padding: 10px 12px;
+      margin: 8px 0;
+      border-radius: 12px;
+      white-space: pre-wrap; word-wrap: break-word;
+      border: 1px solid var(--border);
+    }
+    .bubble.user {
+      margin-left: auto; background: var(--user);
+    }
+    .bubble.assistant {
+      margin-right: auto; background: var(--assistant);
+    }
+    .bubble.meta {
+      margin: 0 auto; background: transparent; color: var(--muted);
+      font-size: 12px; border: none; text-align: center;
+    }
+    .bubble.warn { border-color: rgba(245,158,11,0.4); }
+    .bubble.err  { border-color: rgba(239,68,68,0.4); }
+
+    .row {
+      display: flex; gap: 8px; align-items: flex-start;
+    }
+    .input {
+      flex: 1; display: grid; grid-template-columns: 1fr auto; gap: 8px;
+      border: 1px solid var(--border); border-radius: 12px; padding: 8px;
+      background: rgba(17,24,39,0.8);
+    }
+    textarea {
+      width: 100%; resize: none; height: 64px; background: transparent; color: var(--text);
+      border: none; outline: none; font: inherit;
+    }
+    button.send {
+      height: 40px; padding: 0 16px; border-radius: 10px;
+      border: 1px solid #1d4ed8; background: linear-gradient(180deg, #1d4ed8, #1e40af);
+      color: #fff; font-weight: 600; cursor: pointer;
+    }
+    button.send:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Debug panel */
+    .panel {
+      border: 1px solid var(--border); border-radius: 12px;
+      padding: 10px; background: rgba(17,24,39,0.6);
+      display: grid; gap: 8px; align-content: start;
+    }
+    .panel h2 { font-size: 14px; margin: 0 0 6px 0; }
+    .kv { display: grid; grid-template-columns: 130px 1fr; gap: 6px; font-size: 13px; }
+    .kv .k { color: var(--muted); }
+    pre {
+      margin: 0; padding: 8px; border: 1px solid var(--border); border-radius: 8px;
+      background: #0b1223; color: #d1d5db; font: 12px/1.3 var(--mono);
+      max-height: 240px; overflow: auto;
+    }
+    .tag {
+      display: inline-block; padding: 2px 6px; border-radius: 8px; font-size: 11px;
+      border: 1px solid var(--border); color: #cbd5e1; background: #0b1223;
+      margin-right: 6px;
+    }
+    .tag.ok { border-color: rgba(16,185,129,0.4); color: #a7f3d0; }
+    .tag.warn { border-color: rgba(245,158,11,0.4); color: #fde68a; }
+    .tag.err { border-color: rgba(239,68,68,0.4); color: #fecaca; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🧪 Chat Debug UI</h1>
+    <div class="controls">
+      <label>
+        API endpoint:
+        <input id="apiUrl" type="text" value="/api/chat" />
+      </label>
+      <label>
+        <input id="debugToggle" type="checkbox" checked />
+        Show debug panel
+      </label>
+      <button id="copyLog" class="send" style="height:32px;padding:0 10px;">Copy last response</button>
+    </div>
+  </header>
+
+  <div class="topnote">
+    This page shows exactly what your backend returns. No UI fallbacks. If the LLM reply is empty, you’ll see
+    <code>[EMPTY_REPLY_FROM_SERVER]</code>. If there’s an error, you’ll see <code>[SERVER_ERROR]</code> or <code>[NETWORK_ERROR]</code>.
+  </div>
+
+  <main>
+    <section class="chat">
+      <div id="history" class="history">
+        <div class="bubble meta">Type a message and press Enter to send. Watch the Debug Panel for status, headers, and raw JSON.</div>
+      </div>
+
+      <div class="row">
+        <div class="input">
+          <textarea id="msg" placeholder="Type your message… (Shift+Enter for newline)"></textarea>
+          <button id="send" class="send">Send</button>
+        </div>
+      </div>
+    </section>
+
+    <aside id="debugPanel" class="panel">
+      <h2>Debug Panel</h2>
+      <div class="kv">
+        <div class="k">Status</div><div id="dbgStatus">—</div>
+        <div class="k">Duration</div><div id="dbgTime">—</div>
+        <div class="k">Flags</div><div id="dbgFlags">—</div>
+      </div>
+      <div>
+        <div class="k" style="color:var(--muted);margin:6px 0 4px;">Request JSON</div>
+        <pre id="dbgReq">{}</pre>
+      </div>
+      <div>
+        <div class="k" style="color:var(--muted);margin:6px 0 4px;">Response Headers</div>
+        <pre id="dbgHeaders">—</pre>
+      </div>
+      <div>
+        <div class="k" style="color:var(--muted);margin:6px 0 4px;">Response JSON</div>
+        <pre id="dbgRes">—</pre>
+      </div>
+      <div>
+        <div class="k" style="color:var(--muted);margin:6px 0 4px;">Parsed Reply</div>
+        <pre id="dbgReply">—</pre>
+      </div>
+      <div>
+        <div class="k" style="color:var(--muted);margin:6px 0 4px;">Error</div>
+        <pre id="dbgErr">—</pre>
+      </div>
+    </aside>
+  </main>
+
+  <footer style="padding:10px 16px;color:var(--muted);font-size:12px;">
+    Tip: Open DevTools (F12) → Console for extra logs. This UI does not add any fallback text—what you see is exactly what the server sent.
+  </footer>
+
+  <script>
+    const historyEl = document.getElementById('history');
+    const msgEl = document.getElementById('msg');
+    const sendBtn = document.getElementById('send');
+    const apiUrlEl = document.getElementById('apiUrl');
+    const dbgPanel = document.getElementById('debugPanel');
+    const dbgToggle = document.getElementById('debugToggle');
+
+    const el = (id) => document.getElementById(id);
+
+    function addBubble(text, who='assistant', cls='') {
+      const b = document.createElement('div');
+      b.className = `bubble ${who} ${cls}`;
+      b.textContent = text;
+      historyEl.appendChild(b);
+      historyEl.scrollTop = historyEl.scrollHeight;
+      return b;
+    }
+
+    function serializeHeaders(headers) {
+      const out = {};
+      try {
+        headers.forEach((v, k) => { out[k] = v; });
+      } catch (_) {}
+      return out;
+    }
+
+    function setDebug({status, statusText, ms, flags, req, headers, json, reply, err}) {
+      el('dbgStatus').innerHTML = `${status ?? '—'} ${statusText ? '('+statusText+')' : ''}`;
+      el('dbgTime').textContent = (ms != null) ? `${ms} ms` : '—';
+
+      const tags = [];
+      (flags || []).forEach(f => {
+        const span = document.createElement('span');
+        span.className = 'tag ' + (f.type || '');
+        span.textContent = f.text;
+        tags.push(span.outerHTML);
+      });
+      el('dbgFlags').innerHTML = tags.length ? tags.join(' ') : '—';
+
+      el('dbgReq').textContent = req ? JSON.stringify(req, null, 2) : '{}';
+      el('dbgHeaders').textContent = headers ? JSON.stringify(headers, null, 2) : '—';
+      el('dbgRes').textContent = (json !== undefined) ? JSON.stringify(json, null, 2) : '—';
+      el('dbgReply').textContent = (reply !== undefined) ? String(reply) : '—';
+      el('dbgErr').textContent = err ? String(err) : '—';
+    }
+
+    dbgToggle.addEventListener('change', () => {
+      dbgPanel.classList.toggle('hidden', !dbgToggle.checked);
+    });
+
+    async function sendMessage() {
+      const text = msgEl.value.trim();
+      if (!text) return;
+
+      sendBtn.disabled = true;
+
+      addBubble(text, 'user');
+      msgEl.value = '';
+
+      const url = apiUrlEl.value || '/api/chat';
+      const reqBody = { message: text };
+
+      let status, statusText, headersObj, json, reply, err, flags = [];
+      const t0 = performance.now();
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Client': 'web' },
+          body: JSON.stringify(reqBody),
+        });
+
+        status = res.status;
+        statusText = res.statusText;
+        headersObj = serializeHeaders(res.headers);
+
+        // Try JSON either way (even if !ok)
+        json = await res.json().catch(() => ({}));
+
+        // Expecting { reply: string } on success
+        reply = (json && typeof json.reply !== 'undefined') ? json.reply : undefined;
+
+        // Flags
+        if (!res.ok) {
+          flags.push({text: `HTTP_${status}`, type: status === 429 ? 'warn' : 'err'});
+        }
+        if (typeof reply === 'string' && reply.trim() === '') {
+          flags.push({text: 'EMPTY_REPLY', type: 'warn'});
+        }
+        if (typeof reply === 'undefined') {
+          flags.push({text: 'NO_REPLY_FIELD', type: 'err'});
+        }
+      } catch (e) {
+        err = e;
+        flags.push({text: 'NETWORK_ERROR', type: 'err'});
+      }
+
+      const ms = Math.round(performance.now() - t0);
+
+      // Debug panel
+      setDebug({
+        status, statusText, ms, flags, req: reqBody, headers: headersObj, json, reply, err
+      });
+
+      // Assistant bubble content per raw result (NO fallbacks)
+      if (err) {
+        addBubble('[NETWORK_ERROR] See Debug Panel and console.', 'assistant', 'err');
+      } else if (typeof reply === 'string') {
+        if (reply.trim().length === 0) {
+          addBubble('[EMPTY_REPLY_FROM_SERVER]', 'assistant', 'warn');
+        } else {
+          addBubble(reply, 'assistant');
+        }
+      } else if (json && json.error) {
+        addBubble('[SERVER_ERROR] ' + String(json.error), 'assistant', 'err');
+      } else if (status) {
+        addBubble(`[UNEXPECTED_RESPONSE] status=${status} body=${JSON.stringify(json)}`, 'assistant', 'err');
+      } else {
+        addBubble('[UNKNOWN_STATE] Check Debug Panel.', 'assistant', 'err');
+      }
+
+      sendBtn.disabled = false;
+      msgEl.focus();
+
+      // Also dump to console for deep dives
+      console.debug('[chat-debug]', { url, reqBody, status, statusText, headersObj, json, reply, err, ms });
+    }
+
+    document.getElementById('copyLog').addEventListener('click', async () => {
+      const payload = {
+        status: el('dbgStatus').textContent,
+        duration: el('dbgTime').textContent,
+        req: el('dbgReq').textContent,
+        headers: el('dbgHeaders').textContent,
+        res: el('dbgRes').textContent,
+        reply: el('dbgReply').textContent,
+        err: el('dbgErr').textContent
+      };
+      const text = Object.entries(payload).map(([k,v]) => `# ${k.toUpperCase()}\n${v}`).join('\n\n');
+      try {
+        await navigator.clipboard.writeText(text);
+        alert('Copied last response details to clipboard.');
+      } catch {
+        alert('Copy failed. Select text in Debug Panel and copy manually.');
+      }
+    });
+
+    document.getElementById('send').addEventListener('click', sendMessage);
+    msgEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  </script>
+</body>
+</html>
